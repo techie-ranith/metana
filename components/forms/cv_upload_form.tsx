@@ -1,4 +1,5 @@
 "use client"
+import axios from "axios";
 import {
   useState
 } from "react"
@@ -51,6 +52,37 @@ const formSchema = z.object({
   name_6463284524: z.string()
 });
 
+
+
+async function ApiRequest(values: z.infer<typeof formSchema>) {
+  try {
+    console.log("Submitting data:", values);
+
+    // Define API endpoints
+    const apiEndpoints = [
+      "https://api.example.com/submit1",
+      "https://api.example.com/submit2",
+      "https://api.example.com/submit3"
+    ];
+
+    // Create an array of POST requests
+    const requests = apiEndpoints.map((endpoint) =>
+      axios.post(endpoint, values)
+    );
+
+    // Send all requests concurrently
+    await Promise.all(requests);
+
+    toast.success("Form submitted successfully to all APIs!");
+
+  } catch (error) {
+    console.error("Form submission error", error);
+    toast.error("Failed to submit the form. Please try again.");
+  }
+}
+
+
+
 export default function MyForm() {
 
   const [files, setFiles] = useState < File[] | null > (null);
@@ -65,24 +97,23 @@ export default function MyForm() {
 
   })
 
-  function onSubmit(values: z.infer < typeof formSchema > ) {
-    try {
-      console.log(values);
-      toast(
-        <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
-          <code className="text-white">{JSON.stringify(values, null, 2)}</code>
-        </pre>
-      );
-    } catch (error) {
-      console.error("Form submission error", error);
-      toast.error("Failed to submit the form. Please try again.");
-    }
-  }
+  // function onSubmit(values: z.infer < typeof formSchema > ) {
+  //   try {
+  //     console.log(values);
+  //     toast(
+  //       <pre className="mt-2 w-[340px] rounded-md bg-slate-950 p-4">
+  //         <code className="text-white">{JSON.stringify(values, null, 2)}</code>
+  //       </pre>
+  //     );
+  //   } catch (error) {
+  //     console.error("Form submission error", error);
+  //     toast.error("Failed to submit the form. Please try again.");
+  //   }
+  // }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-3xl mx-auto py-10 w-full">
-        
+      <form onSubmit={form.handleSubmit(ApiRequest)} className="space-y-8 max-w-3xl mx-auto py-10 w-full">
         <FormField
           control={form.control}
           name="name_6597876907"
@@ -139,8 +170,6 @@ export default function MyForm() {
               </FormItem>
             )}
           />
-            
-        
             <FormField
               control={form.control}
               name="name_6463284524"
