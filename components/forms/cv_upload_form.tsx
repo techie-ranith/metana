@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import axios from "axios";
 import { uploadFileToLightsail } from "@/lib/aws";
 
 import {
@@ -32,6 +33,37 @@ const formSchema = z.object({
   name_4780170454: z.string(),
   name_2598142521: z.instanceof(File).optional(),
 });
+
+
+
+async function ApiRequest(values: z.infer<typeof formSchema>) {
+  try {
+    console.log("Submitting data:", values);
+
+    // Define API endpoints
+    const apiEndpoints = [
+      "https://api.example.com/submit1",
+      "https://api.example.com/submit2",
+      "https://api.example.com/submit3"
+    ];
+
+    // Create an array of POST requests
+    const requests = apiEndpoints.map((endpoint) =>
+      axios.post(endpoint, values)
+    );
+
+    // Send all requests concurrently
+    await Promise.all(requests);
+
+    toast.success("Form submitted successfully to all APIs!");
+
+  } catch (error) {
+    console.error("Form submission error", error);
+    toast.error("Failed to submit the form. Please try again.");
+  }
+}
+
+
 
 export default function MyForm() {
   const [file, setFile] = useState<File | null>(null);
