@@ -1,21 +1,25 @@
 import AWS from "aws-sdk";
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 
-console.log('AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID);
-console.log('AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY);
-console.log('AWS_BUCKET_NAME:', process.env.AWS_BUCKET_NAME);
-console.log('AWS_REGION:', process.env.AWS_REGION);
+const accessKeyId = process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY;
+const bucketName = process.env.NEXT_PUBLIC_AWS_BUCKET_NAME;
+const region = process.env.NEXT_PUBLIC_AWS_REGION;
 
-
-const accessKeyId = process.env.AWS_ACCESS_KEY_ID!;
-const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY!;
-const bucketName = process.env.AWS_BUCKET_NAME!;
-const region = process.env.AWS_REGION!;
+// Debug logging (remove in production)
+console.log("Environment Variables:", {
+  accessKeyId: accessKeyId ? "Set" : "Not Set",
+  secretAccessKey: secretAccessKey ? "Set" : "Not Set",
+  bucketName,
+  region,
+});
 
 // Validate environment variables
 if (!accessKeyId || !secretAccessKey || !bucketName || !region) {
-  throw new Error("Missing required environment variables.");
+  throw new Error(
+    "Missing required AWS configuration. Please check your environment variables."
+  );
 }
 
 // Configure AWS SDK
@@ -23,23 +27,35 @@ const s3 = new AWS.S3({
   accessKeyId,
   secretAccessKey,
   region,
+  endpoint: `https://s3.${region}.amazonaws.com`, // Add explicit endpoint
+  signatureVersion: "v4", // Add this for newer regions
 });
 
 export async function uploadFileToLightsail(file: File): Promise<string> {
+  if (!file) {
+    throw new Error("No file provided");
+  }
+
+  // Convert File to Buffer
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+
   const fileKey = `resumes/${Date.now()}-${file.name}`; // Unique filename
 
   const params = {
     Bucket: bucketName,
     Key: fileKey,
-    Body: file,
-    ACL: "public-read", // Makes file publicly accessible
+    Body: buffer,
+    ContentType: file.type,
+    ACL: "public-read",
   };
 
   try {
     const uploadResponse = await s3.upload(params).promise();
-    return uploadResponse.Location; // Public URL of the uploaded file
+    console.log("Upload successful:", uploadResponse.Location);
+    return uploadResponse.Location;
   } catch (error) {
-    console.error("Lightsail Storage Upload Error:", error);
-    throw new Error("Failed to upload file to Lightsail.");
+    console.error("AWS S3 Upload Error:", error);
+    throw error; // Throw the actual error for better debugging
   }
 }
