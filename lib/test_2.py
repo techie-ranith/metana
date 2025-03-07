@@ -1,6 +1,4 @@
 import os
-import boto3
-import json
 import requests
 import smtplib
 import schedule
@@ -15,12 +13,6 @@ from email.message import EmailMessage
 
 # Load environment variables from .env file
 load_dotenv()
-
-# AWS S3 Configuration
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
-S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
-s3_client = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY, aws_secret_access_key=AWS_SECRET_KEY)
 
 # Google Sheets Configuration
 SHEET_NAME = os.getenv("SHEET_NAME")
@@ -40,10 +32,16 @@ SMTP_PORT = int(os.getenv("SMTP_PORT"))
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-def upload_to_s3(file_path, file_name):
-    """Uploads CV to S3 and returns public URL."""
-    s3_client.upload_file(file_path, S3_BUCKET_NAME, file_name, ExtraArgs={'ACL': 'public-read'})
-    return f"https://{S3_BUCKET_NAME}.s3.amazonaws.com/{file_name}"
+def fetch_resume_from_lightsail(public_url):
+    """Fetches the resume from the Lightsail storage bucket public URL."""
+    response = requests.get(public_url)
+    if response.status_code == 200:
+        file_name = public_url.split("/")[-1]
+        with open(file_name, "wb") as file:
+            file.write(response.content)
+        return file_name
+    else:
+        raise Exception(f"Failed to fetch resume from {public_url}")
 
 def extract_text_from_pdf(pdf_path):
     """Extracts text from a PDF CV."""
@@ -130,11 +128,12 @@ def schedule_email(recipient_email):
         time.sleep(60)
 
 # Example usage
-def process_cv(file_path, file_name, recipient_email):
-    cv_public_link = upload_to_s3(file_path, file_name)
-    cv_data = extract_cv_info(file_path)
+def process_cv(public_url, recipient_email):
+    file_name = fetch_resume_from_lightsail(public_url)
+    cv_data = extract_cv_info(file_name)
+    cv_public_link = public_url  # The Lightsail URL is the public link
     store_in_google_sheets(cv_data, cv_public_link)
     send_webhook(cv_data, cv_public_link)
     schedule_email(recipient_email)
 
-# process_cv("/path/to/cv.pdf", "cv.pdf", "applicant@example.com")
+# process_cv("https://your-lightsail-bucket-url/cv.pdf", "applicant@example.com")
