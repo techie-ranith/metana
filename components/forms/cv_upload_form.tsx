@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { uploadFileToLightsail } from "@/lib/aws";
+import { uploadFileToLightsail } from "@/api/aws/route";
 
 import {
   Form,
