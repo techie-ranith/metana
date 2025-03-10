@@ -5,120 +5,116 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
-import { uploadFileToLightsail } from "@/api/aws/route";
-
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
+import { uploadFileToLightsail } from "@/lib/aws";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
-import { CloudUpload, Paperclip } from "lucide-react";
-import {
-  FileInput,
-  FileUploader,
-  FileUploaderContent,
-  FileUploaderItem,
-} from "@/components/ui/extension/file-upload";
+import { CloudUpload, Paperclip, Loader } from "lucide-react";
+import { FileInput, FileUploader, FileUploaderContent, FileUploaderItem } from "@/components/ui/extension/file-upload";
 
 const formSchema = z.object({
-  name_5631324324: z.string().min(1),
-  name_9232977966: z.string().min(1),
-  name_4780170454: z.string(),
-  name_2598142521: z.instanceof(File).optional(),
+  username: z.string().min(1),
+  email: z.string().min(1),
+  phoneNumber: z.string(),
+  fileUpload: z.instanceof(File).optional(),
 });
 
 export default function MyForm() {
   const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false); // Added loading state
 
   const dropZoneConfig = {
-    maxFiles: 1, // Allow only one file
+    maxFiles: 1,
     maxSize: 1024 * 1024 * 4,
-    multiple: false, // Prevent multiple file selection
+    multiple: false,
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name_5631324324: "", // Ensure default string values
-      name_9232977966: "",
-      name_4780170454: "",
-      name_2598142521: undefined, // Optional file input
+      username: "",
+      email: "",
+      phoneNumber: "",
+      // fileUpload: undefined,
     },
   });
 
-  // const form = useForm<z.infer<typeof formSchema>>({
-  //   resolver: zodResolver(formSchema),
-  // });
-
   async function submitToAPI(values: z.infer<typeof formSchema>) {
     try {
-      let resumeURL = "";
+      console.log("Starting submitToAPI with values:", values);
+      setLoading(true); // Set loading to true
   
-      // If a file is selected, upload to Lightsail
+      let resumeURL = "";
       if (file) {
+        console.log("Uploading file:", file.name);
+        // Assuming uploadFileToLightsail is a working function
         resumeURL = await uploadFileToLightsail(file);
+        console.log("File uploaded, resumeURL:", resumeURL);
       }
   
       const formData = new FormData();
-  
-      // Append form values including resume URL
       Object.keys(values).forEach((key) => {
-        if (key === "name_2598142521") {
-          formData.append("resumeUrl", resumeURL); // Attach file URL instead of the file itself
-        } else {
-          const value = values[key as keyof typeof values];
-          if (value !== undefined) {
-            formData.append(key, value);
-          }
+        if (values[key as keyof typeof values]) {
+          formData.append(key, values[key as keyof typeof values] as string);
+          console.log(`FormData appended: ${key} = ${values[key as keyof typeof values]}`);
         }
       });
   
-      // Send form data to the Lambda function
+      // If a file is uploaded, append the file URL to the formData
+      if (file) {
+        formData.append("resumeUrl", resumeURL);
+        console.log("FormData appended: resumeUrl =", resumeURL);
+      }
+  
       const lambdaUrl = process.env.NEXT_PUBLIC_LAMBDA_URL;
       if (!lambdaUrl) {
         throw new Error("NEXT_PUBLIC_LAMBDA_URL is not defined");
       }
+      console.log("Sending FormData to:", lambdaUrl);
+  
       const response = await fetch(lambdaUrl, {
         method: "POST",
         body: formData,
       });
   
+      console.log("Fetch response:", response);
+  
       if (!response.ok) {
-        throw new Error("Failed to submit the form.");
+        const errorText = await response.text();
+        console.error("Fetch failed, response text:", errorText);
+        throw new Error(`Failed to submit form: ${response.status} - ${response.statusText}`);
       }
   
+      console.log("Form submitted successfully!");
       toast.success("Form submitted successfully!");
+      form.reset();
+      setFile(null); // Reset file input after successful submission
     } catch (error) {
-      console.error("Form submission error", error);
+      console.error("Form submission error:", error);
       toast.error("Failed to submit the form. Please try again.");
+    } finally {
+      setLoading(false); // Reset loading state
     }
   }
   
-  
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    submitToAPI(values);
-  }
+  // function onSubmit(values: z.infer<typeof formSchema>) {
+  //   console.log("onSubmit triggered with values:", values);
+  //   submitToAPI(values);
+  // }
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-3xl mx-auto py-10 w-full">
+      <form onSubmit={form.handleSubmit(submitToAPI)} className="space-y-8 max-w-3xl mx-auto py-10 w-full">
         <FormField
           control={form.control}
-          name="name_5631324324"
+          name="username"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Username</FormLabel>
               <FormControl>
-                <Input placeholder="Username" type="text" {...field} />
+                <Input placeholder="" type="text" {...field} />
               </FormControl>
-              <FormDescription>This is your public display name.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -126,14 +122,13 @@ export default function MyForm() {
 
         <FormField
           control={form.control}
-          name="name_9232977966"
+          name="email"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Email</FormLabel>
               <FormControl>
                 <Input placeholder="Email" type="email" {...field} />
               </FormControl>
-              <FormDescription>Enter your email address.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -141,7 +136,7 @@ export default function MyForm() {
 
         <FormField
           control={form.control}
-          name="name_4780170454"
+          name="phoneNumber"
           render={({ field }) => (
             <FormItem className="flex flex-col items-start">
               <FormLabel>Phone number</FormLabel>
@@ -153,15 +148,14 @@ export default function MyForm() {
                   defaultCountry="TR"
                 />
               </FormControl>
-              <FormDescription>Enter your phone number.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <FormField
+        {/* <FormField
           control={form.control}
-          name="name_2598142521"
+          name="fileUpload"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Upload File</FormLabel>
@@ -171,7 +165,7 @@ export default function MyForm() {
                   onValueChange={(newFiles) => {
                     const singleFile = newFiles ? newFiles[0] || null : null;
                     setFile(singleFile);
-                    field.onChange(singleFile); // Update form state
+                    field.onChange(singleFile);
                   }}
                   dropzoneOptions={dropZoneConfig}
                   className="relative bg-background rounded-lg p-2"
@@ -197,13 +191,21 @@ export default function MyForm() {
                   </FileUploaderContent>
                 </FileUploader>
               </FormControl>
-              <FormDescription>Upload a single file.</FormDescription>
               <FormMessage />
             </FormItem>
           )}
-        />
+        /> */}
 
-        <Button type="submit">Submit</Button>
+        <Button type="submit" disabled={loading} className="flex items-center justify-center">
+          {loading ? (
+            <>
+              <Loader className="animate-spin w-4 h-4 mr-2" />
+              Submitting...
+            </>
+          ) : (
+            "Submit"
+          )}
+        </Button>
       </form>
     </Form>
   );

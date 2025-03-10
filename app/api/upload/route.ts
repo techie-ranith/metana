@@ -1,77 +1,73 @@
-import { NextApiRequest, NextApiResponse } from "next";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import multer from "multer";
-import fs from "fs";
-import path from "path";
+import { NextRequest, NextResponse } from "next/server";
 
-// Setup multer storage configuration for file uploads
-const storage = multer.diskStorage({
-  destination: "./public/uploads/",
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
-});
-
-const upload = multer({ storage }).single("file");
-
-const uploadMiddleware = (req: NextApiRequest, res: NextApiResponse, next: (err?: any) => void) => {
-  upload(req as any, res as any, next);
-};
-
-// AWS S3 Client Setup
+// Configure AWS S3 Client (server-side)
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION,
+  region: process.env.NEXT_PUBLIC_AWS_REGION,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    accessKeyId: process.env.NEXT_PUBLIC_AWS_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.NEXT_PUBLIC_AWS_SECRET_ACCESS_KEY || "",
   },
 });
-// API Route to handle file uploads
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-      await new Promise<void>((resolve, reject) => {
-        uploadMiddleware(req, res, (err) => {
-          if (err) return reject(err);
-          resolve();
-        });
-      });
-    try {
-      await new Promise<void>((resolve, reject) => {
-        uploadMiddleware(req, res, (err) => {
-          if (err) return reject(err);
-          resolve();
-        });
-      });
 
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
+export async function POST(request: NextRequest) {
+  try {
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
 
-      const filePath = path.join(process.cwd(), "public/uploads", req.file.filename);
-      const fileStream = fs.createReadStream(filePath);
-
-      const params = {
-        Bucket: process.env.AWS_S3_BUCKET_NAME!,
-        Key: `uploads/${req.file.filename}`,
-        Body: fileStream,
-        ACL: "bucket-owner-full-control",
-      };
-
-      const command = new PutObjectCommand(params);
-      await s3Client.send(command);
-
-      // Cleanup: Remove the file from local storage after upload
-      fs.unlinkSync(filePath);
-
-      res.status(200).json({ message: "File uploaded successfully" });
-    } catch (error) {
-      console.error("Upload Error:", error);
-      res.status(500).json({ error: "Failed to upload file" });
+    if (!file) {
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
-  } else {
-    res.setHeader("Allow", ["POST"]);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+
+    const bucketName = process.env.NEXT_PUBLIC_AWS_BUCKET_NAME;
+    const region = process.env.NEXT_PUBLIC_AWS_REGION;
+
+    if (!bucketName || !region) {
+      return NextResponse.json(
+        { error: "Server misconfiguration" },
+        { status: 500 }
+      );
+    }
+
+    // Generate unique file name
+    const fileExtension = file.name.split(".").pop();
+    const fileKey = `${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2, 15)}.${fileExtension}`;
+
+    // Convert file to array buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    console.log("Uploading to S3:", {
+      bucket: bucketName,
+      region,
+      fileKey,
+      fileSize: buffer.length,
+      fileType: file.type,
+    });
+
+    // Upload to S3
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: fileKey,
+      Body: buffer,
+      ContentType: file.type,
+      ACL: "public-read",
+    });
+
+    await s3Client.send(command);
+
+    // Construct the URL
+    const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${fileKey}`;
+    console.log("File uploaded successfully to:", fileUrl);
+
+    return NextResponse.json({ url: fileUrl });
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }
