@@ -95,23 +95,6 @@ export default function MyForm() {
       console.log("File uploaded successfully:", data.url);
       return data.url;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     } catch (error) {
       console.error("Lightsail upload error:", error);
       throw error;
@@ -129,6 +112,7 @@ export default function MyForm() {
 
       // Upload files one by one with better error handling
       const fileURLs: string[] = [];
+
       for (const file of files) {
         try {
           const url = await uploadToLightsail(file);
@@ -165,12 +149,6 @@ export default function MyForm() {
       // Use absolute URL to prevent path confusion
       const response = await fetch("/api/resume", {
         method: "POST",
-
-
-
-
-
-
         body: formData,
       });
 
