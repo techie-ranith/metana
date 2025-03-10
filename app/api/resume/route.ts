@@ -1,5 +1,5 @@
 import { Document } from "mongoose";
-import resume from "@/models/testModel";
+import resume from "@/models/formModel";
 import BaseController from "@/app/api/baseController/route";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -28,45 +28,11 @@ const handlers: RouteHandlers = {
       return botController.getAllItems();
     }
   },
+  
   POST: async (req: NextRequest) => {
-    try {
-      // Parse the form data
-      const formData = await req.formData();
-
-      // Extract form fields
-      const username = formData.get("username");
-      const email = formData.get("email");
-      const phoneNumber = formData.get("phoneNumber");
-
-      // Get all file URLs (could be multiple)
-      const fileUrls = formData.getAll("fileUpload");
-
-      // You can save this data to your database here
-      // Example: await saveToDatabase({ username, email, phoneNumber, fileUrls });
-
-      // Log the received data (for debugging)
-      console.log("Form data received:", {
-        username,
-        email,
-        phoneNumber,
-        files: fileUrls,
-      });
-
-      // Return success response
-      return NextResponse.json({
-        success: true,
-        message: "Resume submitted successfully",
-      });
-    } catch (error) {
-      console.error("Error processing form submission:", error);
-      return NextResponse.json(
-        {
-          error: error instanceof Error ? error.message : "Unknown error",
-        },
-        { status: 500 }
-      );
-    }
+    return botController.createNewItem(req);
   },
+
   PUT: async (req: NextRequest) => {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

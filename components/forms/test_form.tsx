@@ -61,15 +61,6 @@ export default function MyForm() {
     },
   });
 
-  // Lightsail file upload logic
-
-
-
-
-
-
-
-
 
   async function uploadToLightsail(file: File) {
     try {
@@ -104,15 +95,14 @@ export default function MyForm() {
   async function sendDataToAPI(values: z.infer<typeof formSchema>) {
     try {
       setIsUploading(true);
-
+  
       if (!files || files.length === 0) {
         toast.error("Please select at least one file to upload");
         return;
       }
-
-      // Upload files one by one with better error handling
+  
+      // Upload files
       const fileURLs: string[] = [];
-
       for (const file of files) {
         try {
           const url = await uploadToLightsail(file);
@@ -122,55 +112,45 @@ export default function MyForm() {
           toast.error(`Failed to upload ${file.name}`);
         }
       }
-
+  
       if (fileURLs.length === 0) {
         toast.error("No files were uploaded successfully");
         return;
       }
-
-      const formData = new FormData();
-      formData.append("username", values.username);
-      formData.append("email", values.email);
-      formData.append("phoneNumber", values.phoneNumber);
-
-
-      // Append each file URL as a separate fileUpload entry
-      fileURLs.forEach((url) => {
-        formData.append("fileUpload", url);
-      });
-
-      console.log("Sending form data to API", {
+  
+      const payload = {
         username: values.username,
         email: values.email,
         phoneNumber: values.phoneNumber,
-        fileUrls: fileURLs,
-      });
-
-      // Use absolute URL to prevent path confusion
+        files: fileURLs, // Match the schema field name
+      };
+  
+      console.log("Sending JSON data to API", payload);
+  
       const response = await fetch("/api/resume", {
         method: "POST",
-        body: formData,
+        // headers: {
+        //   "Content-Type": "application/json",
+        // },
+        body: JSON.stringify(payload),
       });
-
+  
       if (!response.ok) {
-        throw new Error(
-          `Failed to submit form: ${response.status} ${response.statusText}`
-        );
+        throw new Error(`Failed to submit form: ${response.status} ${response.statusText}`);
       }
-
+  
       const data = await response.json();
       toast.success("Form submitted successfully!");
       form.reset();
       setFiles(null);
     } catch (error) {
       console.error("Error submitting form:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Failed to submit form"
-      );
+      toast.error(error instanceof Error ? error.message : "Failed to submit form");
     } finally {
       setIsUploading(false);
     }
   }
+  
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     try {
