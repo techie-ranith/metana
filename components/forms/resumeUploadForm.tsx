@@ -130,8 +130,8 @@ export default function MyForm() {
       };
   
       console.log("Sending JSON data to API", payload);
-  
-      const response = await fetch("/api/resume", {
+      const Lambda_trigger = process.env.LAMBDA_TRIGGER;
+      const response = await fetch(`${Lambda_trigger}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
