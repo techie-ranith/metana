@@ -25,7 +25,7 @@ import {
   FileUploaderItem,
 } from "@/components/ui/extension/file-upload";
 
-import { uploadFileToLightsail } from "@/lib/aws"; // Import the working function
+// import { uploadFileToLightsail } from "@/lib/aws"; // Import the working function
 
 
 
