@@ -18,7 +18,7 @@ load_dotenv()
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT"))
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+CANDIDATE_EMAIL_ADDRESS = os.getenv("CANDIDATE_EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 def fetch_resume_from_lightsail(public_url):
@@ -44,7 +44,6 @@ def extract_text_from_docx(docx_path):
     """Extracts text from a DOCX CV."""
     doc = docx.Document(docx_path)
     return "\n".join([para.text for para in doc.paragraphs])
-
 
 def extract_cv_info(file_path):
     """Extracts relevant information from CV text (name, email, education, qualifications, and projects)."""
@@ -95,7 +94,7 @@ def extract_name(lines):
 
 def extract_email(text):
     """Extracts the email address from the text."""
-    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA0-9]{2,}"
     emails = re.findall(email_pattern, text)
     return emails[0] if emails else "Not Provided"
 
@@ -126,7 +125,6 @@ def extract_projects(lines):
     
     return projects
 
-
 def send_webhook(cv_data):
     """Sends processed CV data to webhook endpoint."""
     payload = {
@@ -142,20 +140,20 @@ def send_webhook(cv_data):
             "processed_timestamp": datetime.datetime.utcnow().isoformat()
         }
     }
-    headers = {"X-Candidate-Email": cv_data["email"]}
+    headers = {"X-Candidate-Email": CANDIDATE_EMAIL_ADDRESS}
     requests.post(WEBHOOK_URL, headers=headers, json=payload)
 
 def send_followup_email(recipient_email):
     """Sends a follow-up email."""
     msg = EmailMessage()
     msg["Subject"] = "Your Job Application is Under Review"
-    msg["From"] = EMAIL_ADDRESS
+    msg["From"] = CANDIDATE_EMAIL_ADDRESS
     msg["To"] = recipient_email
     msg.set_content("Hello,\n\nYour job application is under review. We will update you soon.\n\nBest regards,\nMetana Team")
     
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
         server.starttls()
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.login(CANDIDATE_EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.send_message(msg)
 
 # Schedule Email to be Sent the Next Day
@@ -170,24 +168,23 @@ def schedule_email(recipient_email):
         schedule.run_pending()
         time.sleep(60)
 
-# Process CV
+# Process CV and store in Google Sheets
 def process_cv(cv_data):
-    """Processes the CV data received from the API request."""
+    """Processes the CV data received from the API request."""  
     file_name = fetch_resume_from_lightsail(cv_data["resume_publicUrl"])
     extracted_cv_data = extract_cv_info(file_name)
     
     # Store in Google Sheets using imported function
-    append_to_google_sheets([
+    sheetConnect.append_to_google_sheets([  # Assuming the function `append_to_google_sheets` is defined in googleSheetConnect
         cv_data["name"],
         cv_data["email"],
         cv_data["phone"],
         cv_data["education"],
-        cv_data["qualification"],
+        cv_data["qualifications"],
         cv_data["projects"],
         cv_data["resume_publicUrl"]
     ])
     
     send_webhook(cv_data)
     schedule_email(cv_data["email"])
-
 

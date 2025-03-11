@@ -8,10 +8,12 @@ load_dotenv()
 
 # Google Sheets Configuration
 SHEET_NAME = os.getenv("SHEET_NAME")
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
-
+SERVICE_ACCOUNT_FILE = "D:/projects/metana/sheet/googleSheetConnect/Credentials.json"
+print(SHEET_NAME)   
+print(SERVICE_ACCOUNT_FILE)
 # Define the scope
-SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+
 
 # Authenticate with Google Sheets API
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
