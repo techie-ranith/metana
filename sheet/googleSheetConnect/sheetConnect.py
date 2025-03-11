@@ -9,7 +9,7 @@ load_dotenv()
 # Google Sheets Configuration
 SHEET_NAME = os.getenv("SHEET_NAME")
 SERVICE_ACCOUNT_FILE = "D:/projects/metana/sheet/googleSheetConnect/Credentials.json"
-print(SHEET_NAME)   
+print(SHEET_NAME)
 print(SERVICE_ACCOUNT_FILE)
 # Define the scope
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -21,6 +21,8 @@ client = gspread.authorize(creds)
 
 # Open the Google Sheet
 sheet = client.open(SHEET_NAME).sheet1
+for sheet in client.openall():
+    print(sheet.title)
 
 def append_to_google_sheets(data):
     """Append data to the Google Sheet."""
