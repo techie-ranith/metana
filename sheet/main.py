@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 
 # Import CV processing functions
-from cv_processing import process_cv  # Assuming your CV processing logic is in cv_processing.py
+from lambda_function import process_cv  # Assuming your CV processing logic is in cv_processing.py
 
 # Load environment variables
 load_dotenv()
