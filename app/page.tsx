@@ -8,7 +8,6 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center w-full h-screen py-10">
       <Image src={Metana} alt="Metana Logo" />
-      {/* <Form></Form> */}
       <TestForm></TestForm>
       <div className="w-full h-screen relative">
     </div>

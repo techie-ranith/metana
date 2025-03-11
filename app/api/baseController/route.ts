@@ -1,6 +1,7 @@
-import mongoose, { Model, Document } from 'mongoose';
+import mongoose, { Document, Model } from 'mongoose';
 import { NextRequest, NextResponse } from 'next/server';
 import ConnectMongoDB from '@/lib/db';
+import Form from '@/models/formModel';
 
 async function connectDB() {
     if (mongoose.connection.readyState === 0) {
@@ -10,13 +11,11 @@ async function connectDB() {
 
 await connectDB();
 
-// type ControllerMethod = (req: NextRequest) => Promise<NextResponse>;
-
 export default class BaseController<T extends Document> {
     private model: Model<T>;
 
     constructor(model: Model<T>) {
-        this.model = model;
+        this.model = model;  // Assign the model during instantiation
     }
 
     private handleErrors(error: unknown): NextResponse {
@@ -41,14 +40,14 @@ export default class BaseController<T extends Document> {
     }
 
     public async getSingleItem(req: NextRequest): Promise<NextResponse> {
-        const { searchParams } = new URL(req.url);  
+        const { searchParams } = new URL(req.url);
         const id = searchParams.get("bot_ID"); // Keep it as a string
         console.log(id);
-    
+
         if (!id) {
             return NextResponse.json({ error: "bot_ID is required" }, { status: 400 });
         }
-    
+
         try {
             const item = await this.model.findOne({ bot_ID: id }); // Find by bot_ID field
             
@@ -60,16 +59,29 @@ export default class BaseController<T extends Document> {
             return this.handleErrors(error);
         }
     }
-    
-
 
     public async createNewItem(req: NextRequest): Promise<NextResponse> {
         try {
             const body = await req.json();
+
+            console.log("Received payload:", body); 
+
+            if (!body || Object.keys(body).length === 0) {
+                return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+            }
+
+            console.log("Inserting into DB:", body);
+
             const item = await this.model.create(body);
+
+            // Debugging: Log successful insert
+            console.log("Successfully created item:", item);
+
             return NextResponse.json({ item }, { status: 201 });
         } catch (error) {
-            return this.handleErrors(error);
+            console.error("Error in createNewItem:", error); // Log actual error
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            return NextResponse.json({ error: "Internal Server Error", details: errorMessage }, { status: 500 });
         }
     }
 

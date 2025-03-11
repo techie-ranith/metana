@@ -8,7 +8,8 @@ import pdfplumber
 import docx
 from dotenv import load_dotenv
 from email.message import EmailMessage
-from googleSheetConnect import append_to_google_sheets  # Import the function
+from googleSheetConnect import sheetConnect  # Import the function
+import re
 
 # Load environment variables
 load_dotenv()
@@ -44,8 +45,9 @@ def extract_text_from_docx(docx_path):
     doc = docx.Document(docx_path)
     return "\n".join([para.text for para in doc.paragraphs])
 
+
 def extract_cv_info(file_path):
-    """Extracts relevant information from CV text."""
+    """Extracts relevant information from CV text (name, email, education, qualifications, and projects)."""
     file_extension = file_path.split('.')[-1]
     if file_extension == "pdf":
         text = extract_text_from_pdf(file_path)
@@ -55,17 +57,75 @@ def extract_cv_info(file_path):
         return None
     
     lines = text.split("\n")
-    personal_info = {"name": lines[0], "email": "example@example.com", "phone": "1234567890"}
-    education = [line for line in lines if "BSc" in line or "MSc" in line]
-    qualifications = [line for line in lines if "Certified" in line]
-    projects = [line for line in lines if "Project" in line]
+    
+    # Extracting information
+    personal_info = extract_personal_info(lines, text)
+    education = extract_education(lines)
+    qualifications = extract_qualifications(lines)
+    projects = extract_projects(lines)
     
     return {
         "personal_info": personal_info,
         "education": education,
         "qualifications": qualifications,
-        "projects": projects,
+        "projects": projects
     }
+
+def extract_personal_info(lines, text):
+    """Extracts the candidate's name, email, and phone number."""
+    name = extract_name(lines)
+    email = extract_email(text)
+    phone = extract_phone(text)
+    
+    return {"name": name, "email": email, "phone": phone}
+
+def extract_name(lines):
+    """Extracts the candidate's name from the first 10 lines."""
+    for line in lines[:10]:
+        if 'References' in line or 'Referee' in line:
+            continue  # Skip lines related to references
+        
+        name_pattern = r"([A-Z][a-z]+(?:\s[A-Z][a-z]+)+)"
+        name_match = re.match(name_pattern, line)
+        
+        if name_match:
+            return name_match.group(0)
+    
+    return "Not Found"
+
+def extract_email(text):
+    """Extracts the email address from the text."""
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+    emails = re.findall(email_pattern, text)
+    return emails[0] if emails else "Not Provided"
+
+def extract_phone(text):
+    """Extracts the phone number from the text."""
+    phone_pattern = r"\+?\d{1,4}[-.\s]?\(?\d{1,3}\)?[-.\s]?\d{1,4}[-.\s]?\d{1,4}[-.\s]?\d{1,4}"
+    phones = re.findall(phone_pattern, text)
+    return phones[0] if phones else "Not Provided"
+
+def extract_education(lines):
+    """Extracts education details from the CV text."""
+    education_keywords = ["BSc", "MSc", "PhD", "Bachelor", "Master", "Degree"]
+    education = [line for line in lines if any(keyword in line for keyword in education_keywords)]
+    
+    return education
+
+def extract_qualifications(lines):
+    """Extracts qualifications or certifications from the CV text."""
+    qualification_keywords = ["Certified", "Certification", "Certified in", "Diploma"]
+    qualifications = [line for line in lines if any(keyword in line for keyword in qualification_keywords)]
+    
+    return qualifications
+
+def extract_projects(lines):
+    """Extracts project details from the CV text."""
+    project_keywords = ["Project", "Experience", "Worked on"]
+    projects = [line for line in lines if any(keyword in line for keyword in project_keywords)]
+    
+    return projects
+
 
 def send_webhook(cv_data):
     """Sends processed CV data to webhook endpoint."""
@@ -130,13 +190,4 @@ def process_cv(cv_data):
     send_webhook(cv_data)
     schedule_email(cv_data["email"])
 
-# Example usage
-# process_cv({
-#     "name": "John Doe",
-#     "email": "johndoe@example.com",
-#     "phone": "1234567890",
-#     "education": "BSc in Computer Science",
-#     "qualification": "Certified Python Developer",
-#     "projects": "AI-based Resume Parser",
-#     "resume_publicUrl": "https://your-lightsail-bucket-url/cv.pdf"
-# })
+

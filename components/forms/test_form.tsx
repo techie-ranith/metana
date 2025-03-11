@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -23,23 +25,47 @@ import {
   FileUploaderItem,
 } from "@/components/ui/extension/file-upload";
 
-// Removed Zod schema
+import { uploadFileToLightsail } from "@/lib/aws"; // Import the working function
+
+
+
+
+
+
+const formSchema = z.object({
+  username: z.string().min(1, "Username is required"),
+  email: z.string().email("Invalid email address"),
+  phoneNumber: z.string().min(1, "Phone number is required"),
+  fileUpload: z
+    .array(z.string().url("Invalid URL format"))
+    .min(1, "At least one file URL is required"),
+});
+
 
 export default function MyForm() {
-  const [files, setFiles] = useState<File[] | null>(null); // Multiple files state
+  const [files, setFiles] = useState<File[] | null>(null);
   const [isUploading, setIsUploading] = useState(false); // Add upload state
 
-  const form = useForm({
+  const dropZoneConfig = {
+    maxFiles: 5,
+    maxSize: 1024 * 1024 * 4,
+    multiple: true,
+  };
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
     defaultValues: {
       username: "",
       email: "",
       phoneNumber: "",
-      fileUpload: null as File | null, // Matches `nullable()` in schema
+      fileUpload: [],
     },
   });
 
+
   async function uploadToLightsail(file: File) {
     try {
+
       console.log("Uploading file to Lightsail:", file.name);
 
       // Create form data for the file
@@ -59,7 +85,7 @@ export default function MyForm() {
 
       const data = await response.json();
       console.log("File uploaded successfully:", data.url);
-      return data.url; // Return the URL from the response
+      return data.url;
 
     } catch (error) {
       console.error("Lightsail upload error:", error);
@@ -67,45 +93,62 @@ export default function MyForm() {
     }
   }
 
-  async function sendDataToAPI(values: any) {
+
+  async function sendDataToAPI(values: z.infer<typeof formSchema>) {
+    console.log("Sending data to API", values);
     try {
       setIsUploading(true);
-
+  
       if (!files || files.length === 0) {
-        throw new Error("No file selected for upload.");
+        toast.error("Please select at least one file to upload");
+        return;
       }
-
-      // Upload the file and get the file URL (data.url)
-      const fileURL = await uploadToLightsail(files[0]);
-
-      // Log the data (file URL) before sending it to the API
-      console.log("Form data to be sent to API:", {
+  
+      // Upload files
+      const fileURLs: string[] = [];
+      for (const file of files) {
+        try {
+          const url = await uploadToLightsail(file);
+          fileURLs.push(url);
+          console.log("Uploaded file:", url);
+        } catch (err) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          toast.error(`Failed to upload ${file.name}`);
+        }
+      }
+  
+      if (fileURLs.length === 0) {
+        toast.error("No files were uploaded successfully");
+        return;
+      }
+  
+      const payload = {
         username: values.username,
         email: values.email,
         phoneNumber: values.phoneNumber,
-        file: fileURL, // The file URL returned from uploadToLightsail
-      });
-
-      // Prepare form data to send to the API
-      const formData = new FormData();
-      formData.append('username', values.username);
-      formData.append('email', values.email);
-      formData.append('phoneNumber', values.phoneNumber);
-      formData.append('file', fileURL); // Send the file URL
-
-      // Send the form data to the API
-      const BaseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
-      const response = await fetch(`${BaseURL}/api/resume`, {
+        files: fileURLs, // Match the schema field name
+      };
+  
+      console.log("Sending JSON data to API", payload);
+  
+      const response = await fetch("/api/resume", {
         method: "POST",
-        body: formData,  // Send FormData directly
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       });
+
+        console.log("Response frosssm API:", response);
 
       if (!response.ok) {
-        throw new Error(`Failed to submit form: ${response.status} ${response.statusText}`);
-      }
 
+        throw new Error(`Failed to submit form: ${response.status} ${response.statusText}`);
+
+      }
+  
       const data = await response.json();
-      toast.success("Form submitted successfully!");
+      toast.success("Form submitted successfully!",data);
       form.reset();
       setFiles(null);
     } catch (error) {
@@ -115,8 +158,9 @@ export default function MyForm() {
       setIsUploading(false);
     }
   }
+  
 
-  function onSubmit(values: any) {
+  function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       console.log("Submitting form data:", values);
       sendDataToAPI(values);
@@ -188,26 +232,27 @@ export default function MyForm() {
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="fileUpload"
-          render={() => (
-            <FormItem>
-              <FormLabel>Upload file</FormLabel>
-              <FormControl>
-                <FileUploader
-                  value={files}
-                  onValueChange={(uploadedFiles) => {
-                    setFiles(uploadedFiles); // Update local state with multiple files
-                    if (uploadedFiles && uploadedFiles.length > 0) {
-                      form.setValue("fileUpload", uploadedFiles[0], {
-                        shouldValidate: true,
-                      }); // Update form state with the first file
-                    }
-                  }}
-                  dropzoneOptions={{}} // Provide the required dropzoneOptions property
-                  className="relative bg-background rounded-lg p-2"
-                >
+          <FormField
+            control={form.control}
+            name="fileUpload"
+            render={() => (
+              <FormItem>
+                <FormLabel>Upload file</FormLabel>
+                <FormControl>
+                  <FileUploader
+                    value={files}
+                    onValueChange={(uploadedFiles) => {
+                      setFiles(uploadedFiles); // Update local state
+                      if (uploadedFiles) {
+                        const fileUrls = uploadedFiles.map(file => URL.createObjectURL(file));
+                        form.setValue("fileUpload", fileUrls, {
+                          shouldValidate: true,
+                        }); // Update form state
+                      }
+                    }}
+                    dropzoneOptions={dropZoneConfig}
+                    className="relative bg-background rounded-lg p-2"
+                  >
                   <FileInput className="outline-dashed outline-1 outline-slate-500">
                     <div className="flex items-center justify-center flex-col p-8 w-full">
                       <CloudUpload className="text-gray-500 w-10 h-10" />
@@ -221,12 +266,12 @@ export default function MyForm() {
                     </div>
                   </FileInput>
                   <FileUploaderContent>
-                    {files && files.length > 0 && (
-                      <FileUploaderItem index={0}>
+                    {files?.map((file, i) => (
+                      <FileUploaderItem key={i} index={i}>
                         <Paperclip className="h-4 w-4 stroke-current" />
-                        <span>{files[0].name}</span>
+                        <span>{file.name}</span>
                       </FileUploaderItem>
-                    )}
+                    ))}
                   </FileUploaderContent>
                 </FileUploader>
               </FormControl>
