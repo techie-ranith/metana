@@ -1,2 +1,4 @@
 *.json
 *.env
+
+/googleSheetConnect/credentials.json
