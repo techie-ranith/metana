@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -25,73 +23,61 @@ import {
   FileUploaderItem,
 } from "@/components/ui/extension/file-upload";
 
-import { uploadFileToLightsail } from "@/lib/aws"; // Import the working function
+// Removed Zod schema
 
-// Schema definition
-const formSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  email: z.string().email("Invalid email address"),
-  phoneNumber: z.string().min(1, "Phone number is required"),
-  fileUpload: z
-    .instanceof(File)
-    .refine(file => file.size > 0, "File is required"),
-});
- 
 export default function MyForm() {
   const [files, setFiles] = useState<File[] | null>(null); // Multiple files state
   const [isUploading, setIsUploading] = useState(false); // Add upload state
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm({
     defaultValues: {
       username: "",
       email: "",
       phoneNumber: "",
-      fileUpload: undefined,
+      fileUpload: null as File | null, // Matches `nullable()` in schema
     },
   });
 
   async function uploadToLightsail(file: File) {
     try {
       console.log("Uploading file to Lightsail:", file.name);
-  
+
       // Create form data for the file
       const formData = new FormData();
       formData.append("file", file);
-  
+
       // Send to our server-side API route
       const response = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Upload failed");
       }
-  
+
       const data = await response.json();
       console.log("File uploaded successfully:", data.url);
       return data.url; // Return the URL from the response
-  
+
     } catch (error) {
       console.error("Lightsail upload error:", error);
       throw error;
     }
   }
-  
-  async function sendDataToAPI(values: z.infer<typeof formSchema>) {
+
+  async function sendDataToAPI(values: any) {
     try {
       setIsUploading(true);
-  
+
       if (!files || files.length === 0) {
-        toast.error("Please select a file to upload");
-        return;
+        throw new Error("No file selected for upload.");
       }
-  
+
       // Upload the file and get the file URL (data.url)
       const fileURL = await uploadToLightsail(files[0]);
-  
+
       // Log the data (file URL) before sending it to the API
       console.log("Form data to be sent to API:", {
         username: values.username,
@@ -99,25 +85,25 @@ export default function MyForm() {
         phoneNumber: values.phoneNumber,
         file: fileURL, // The file URL returned from uploadToLightsail
       });
-  
+
       // Prepare form data to send to the API
       const formData = new FormData();
       formData.append('username', values.username);
       formData.append('email', values.email);
       formData.append('phoneNumber', values.phoneNumber);
       formData.append('file', fileURL); // Send the file URL
-  
+
       // Send the form data to the API
       const BaseURL = process.env.NEXT_PUBLIC_API_BASE_URL;
       const response = await fetch(`${BaseURL}/api/resume`, {
         method: "POST",
         body: formData,  // Send FormData directly
       });
-  
+
       if (!response.ok) {
         throw new Error(`Failed to submit form: ${response.status} ${response.statusText}`);
       }
-  
+
       const data = await response.json();
       toast.success("Form submitted successfully!");
       form.reset();
@@ -129,9 +115,8 @@ export default function MyForm() {
       setIsUploading(false);
     }
   }
-  
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: any) {
     try {
       console.log("Submitting form data:", values);
       sendDataToAPI(values);

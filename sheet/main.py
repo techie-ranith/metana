@@ -6,27 +6,15 @@ import time
 import datetime
 import pdfplumber
 import docx
-import gspread
 from dotenv import load_dotenv
-from oauth2client.service_account import ServiceAccountCredentials
 from email.message import EmailMessage
+from googleSheetConnect import append_to_google_sheets  # Import the function
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Google Sheets Configuration
-SHEET_NAME = os.getenv("SHEET_NAME")
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, scope)
-client = gspread.authorize(creds)
-sheet = client.open(SHEET_NAME).sheet1
-
-# Webhook Endpoint
+# Webhook and Email Configuration
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-X_CANDIDATE_EMAIL = os.getenv("X_CANDIDATE_EMAIL")
-
-# Email Configuration
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT"))
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
@@ -79,27 +67,22 @@ def extract_cv_info(file_path):
         "projects": projects,
     }
 
-def store_in_google_sheets(cv_data, cv_public_link):
-    """Stores extracted data in Google Sheets."""
-    sheet.append_row([cv_data["personal_info"]["name"], cv_data["personal_info"]["email"],
-                      cv_data["personal_info"]["phone"], cv_public_link])
-
-def send_webhook(cv_data, cv_public_link):
+def send_webhook(cv_data):
     """Sends processed CV data to webhook endpoint."""
     payload = {
         "cv_data": {
             **cv_data,
-            "cv_public_link": cv_public_link
+            "cv_public_link": cv_data["resume_publicUrl"]
         },
         "metadata": {
-            "applicant_name": cv_data["personal_info"]["name"],
-            "email": X_CANDIDATE_EMAIL,
+            "applicant_name": cv_data["name"],
+            "email": cv_data["email"],
             "status": "prod",
             "cv_processed": True,
             "processed_timestamp": datetime.datetime.utcnow().isoformat()
         }
     }
-    headers = {"X-Candidate-Email": X_CANDIDATE_EMAIL}
+    headers = {"X-Candidate-Email": cv_data["email"]}
     requests.post(WEBHOOK_URL, headers=headers, json=payload)
 
 def send_followup_email(recipient_email):
@@ -127,13 +110,33 @@ def schedule_email(recipient_email):
         schedule.run_pending()
         time.sleep(60)
 
-# Example usage
-def process_cv(public_url, recipient_email):
-    file_name = fetch_resume_from_lightsail(public_url)
-    cv_data = extract_cv_info(file_name)
-    cv_public_link = public_url  # The Lightsail URL is the public link
-    store_in_google_sheets(cv_data, cv_public_link)
-    send_webhook(cv_data, cv_public_link)
-    schedule_email(recipient_email)
+# Process CV
+def process_cv(cv_data):
+    """Processes the CV data received from the API request."""
+    file_name = fetch_resume_from_lightsail(cv_data["resume_publicUrl"])
+    extracted_cv_data = extract_cv_info(file_name)
+    
+    # Store in Google Sheets using imported function
+    append_to_google_sheets([
+        cv_data["name"],
+        cv_data["email"],
+        cv_data["phone"],
+        cv_data["education"],
+        cv_data["qualification"],
+        cv_data["projects"],
+        cv_data["resume_publicUrl"]
+    ])
+    
+    send_webhook(cv_data)
+    schedule_email(cv_data["email"])
 
-# process_cv("https://your-lightsail-bucket-url/cv.pdf", "applicant@example.com")
+# Example usage
+# process_cv({
+#     "name": "John Doe",
+#     "email": "johndoe@example.com",
+#     "phone": "1234567890",
+#     "education": "BSc in Computer Science",
+#     "qualification": "Certified Python Developer",
+#     "projects": "AI-based Resume Parser",
+#     "resume_publicUrl": "https://your-lightsail-bucket-url/cv.pdf"
+# })
