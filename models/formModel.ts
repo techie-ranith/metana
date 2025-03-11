@@ -18,9 +18,9 @@ const FormSchema = new mongoose.Schema(
       type: String,
       required: [true, "Phone number is required"],
     },
-    files: {
+    fileURL: {
       type: String,
-      required: [true, "Files are required"],
+      required: [true, "File URL is required"],
     }
   },
   { timestamps: true }
